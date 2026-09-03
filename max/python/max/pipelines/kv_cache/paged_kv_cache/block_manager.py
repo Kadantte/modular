@@ -729,6 +729,8 @@ class BlockManager:
         self,
         desired_hashes: Sequence[bytes],
         replica_idx: int = 0,
+        *,
+        hint: bytes | None,
     ) -> tuple[list[KVCacheBlock], KVConnectorTransfer]:
         """Onloads device blocks with the desired hashes from the connector.
 
@@ -744,6 +746,9 @@ class BlockManager:
         separate copy engine: the destination blocks are pinned and their
         prefix-cache commit is deferred until the copy lands (``poll_transfers``)
         so a concurrent request in the same batch cannot read them early.
+
+        ``hint`` is the request's raw ``dkv_cache_hint``, passed through to the
+        connector; see :meth:`KVConnector.load`.
 
         Returns:
             ``(loaded_blocks, event)``; ``event`` is an already-complete
@@ -769,6 +774,7 @@ class BlockManager:
             {leaf_id: block_ids for leaf_id in connector.leaves},
             desired_hashes,
             replica_idx=replica_idx,
+            hint=hint,
         )
 
         # The connector may load fewer blocks than requested; its event reports
@@ -805,7 +811,7 @@ class BlockManager:
 
     @traced
     def count_cached_prefix_blocks(
-        self, block_hashes: Sequence[bytes]
+        self, block_hashes: Sequence[bytes], replica_idx: int = 0
     ) -> PrefixCacheHits:
         """Counts contiguous leading blocks resident in this replica's caches.
 
@@ -825,6 +831,7 @@ class BlockManager:
 
         Args:
             block_hashes: The request's block hash chain, in prefix order.
+            replica_idx: The replica whose caches are probed.
 
         Returns:
             Per-tier counts of the contiguous cached prefix.
@@ -834,9 +841,18 @@ class BlockManager:
 
         num_device_hits = 0
         if not self._only_use_kv_connector_last_level_cache:
-            device_prefix_cache = self.device_block_pool.prefix_cache
+            device_prefix_cache = self.device_block_pools[
+                replica_idx
+            ].prefix_cache
             for block_hash in block_hashes:
-                if block_hash not in device_prefix_cache:
+                if self._cross_replica_copy_enabled:
+                    _, blk = self._find_block_in_any_replica(
+                        block_hash, replica_idx
+                    )
+                    present = blk is not None
+                else:
+                    present = block_hash in device_prefix_cache
+                if not present:
                     break
                 num_device_hits += 1
 
@@ -893,7 +909,7 @@ class BlockManager:
 
         # query the host prefix cache for full blocks via connector
         host_blocks, load_event = self._get_full_blocks_from_host_prefix_cache(
-            uncommitted_hashes, replica_idx
+            uncommitted_hashes, replica_idx, hint=ctx.dkv_cache_hint
         )
 
         # refresh the lru status of all hit hashes associated with the request.

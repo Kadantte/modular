@@ -259,6 +259,19 @@ class PipelineRuntimeConfig(ConfigFileModel):
         ),
     )
 
+    experimental_device_graph_synthesis: bool = Field(
+        default=False,
+        description=(
+            "Compile model graphs with device-graph synthesis: the compiled "
+            "model constructs a device graph directly and executes it on "
+            "model forward passes. This is an experimental alternative to the "
+            "capture/replay workflow. Honored only by "
+            "architectures that opt in, and mutually exclusive with "
+            "``device_graph_capture``. "
+            "Use ``--experimental-device-graph-synthesis`` to enable."
+        ),
+    )
+
     fold_sampler_into_graph: bool = Field(
         default=True,
         description=(
@@ -544,3 +557,8 @@ class PipelineRuntimeConfig(ConfigFileModel):
     """The section name to use when loading this config from a MAXConfig file.
     This is used to differentiate between different config sections in a single
     MAXConfig file."""
+
+    @property
+    def is_disaggregated(self) -> bool:
+        """Whether this worker is part of a disaggregated prefill/decode deployment."""
+        return self.pipeline_role in ("prefill_only", "decode_only")

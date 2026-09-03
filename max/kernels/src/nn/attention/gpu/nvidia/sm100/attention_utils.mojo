@@ -27,10 +27,10 @@ from std.sys import size_of, _RegisterPackType, get_defined_bool
 from std.sys._assembly import inlined_assembly
 from std.sys.intrinsics import llvm_intrinsic
 from std.bit import prev_power_of_two, pop_count
-from std.gpu import block_idx
-from std.gpu.globals import WARP_SIZE
-from std.gpu.primitives.id import cluster_dim
-from std.gpu.primitives.warp import broadcast
+from max.gpu import block_idx
+from max.gpu.globals import WARP_SIZE
+from max.gpu.primitives.id import cluster_dim
+from max.gpu.primitives.warp import broadcast
 from max.gpu.host.nvidia.tma import TensorMapSwizzle
 from max.gpu.compute.arch.mma_nvidia_sm100 import (
     UMMAInsDescriptor,
@@ -719,8 +719,8 @@ struct TMemTile[
                     ]()
                     var tmem = self.tmem_addr + UInt32(offsets.tmem_offset)
                     var frag = Array[_, offsets.local_frag_size_b32](
-                        fill_with=lambda (_i: Int) -> UInt32: ptr.load(
-                            offsets.ptr_offset + _i
+                        fill_with_unrolled=lambda [i: Int]() -> UInt32: (
+                            ptr.load(offsets.ptr_offset + i)
                         )
                     )
                     # 16 x 256b results in repeated 8x4 matrix of <1,2> vector pattern

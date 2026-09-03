@@ -24,8 +24,8 @@ from std.collections import Optional
 from std.memory import Pointer, UnsafePointer
 from std.sys import simd_width_of, size_of, align_of
 
-from std.gpu import WARP_SIZE, thread_idx
-from std.gpu import lane_id, warp_id as get_warp_id
+from max.gpu import WARP_SIZE, thread_idx
+from max.gpu import lane_id, warp_id as get_warp_id
 from max.gpu.memory import fence_async_view_proxy
 from max.gpu.host.nvidia.tma import TensorMapSwizzle
 from layout import (
@@ -1540,14 +1540,14 @@ struct TileWriter[
             var casted = frags.cast[Self.epilogue_dtype]()
 
             var upper_frag_casted = Array[_, Self.rep_frag_size](
-                fill_with=lambda (_i: Int) -> Scalar[
+                fill_with_unrolled=lambda [i: Int]() -> Scalar[
                     Self.epilogue_dtype
-                ]: casted.upper[_i]
+                ]: casted.upper[i]
             )
             var lower_frag_casted = Array[_, Self.rep_frag_size](
-                fill_with=lambda (_i: Int) -> Scalar[
+                fill_with_unrolled=lambda [i: Int]() -> Scalar[
                     Self.epilogue_dtype
-                ]: casted.lower[_i]
+                ]: casted.lower[i]
             )
 
             comptime if stage == Self.num_stages - 1:

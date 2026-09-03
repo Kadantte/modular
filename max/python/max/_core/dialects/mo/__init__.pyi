@@ -38,7 +38,7 @@ class BufferType(max._core.Type):
     In conjunction with the operations mo.mutable.load and mo.mutable.store
     this type can be used to model in-place operations in the MO dialect.
 
-    The `shapeAttr` is less permisive than the equivalent for `!mo.tensor`
+    The `shape` is less permissive than the equivalent for `!mo.tensor`
     values and must be a `MOSH::ShapeAttr` (i.e. statically ranked).
 
     The element type is an M::DType, with `invalid` denoting an unknown type.
@@ -47,7 +47,6 @@ class BufferType(max._core.Type):
     ```mlir
     !mo.buffer<[4, 16], f32>    // static shape
     !mo.buffer<[N, N, 6], i32>  // parameterized shape
-    !mo.tensor<Sh, invalid>     // shape parameter reference
     ```
     """
 
@@ -56,7 +55,7 @@ class BufferType(max._core.Type):
     @overload
     def __init__(
         self,
-        shape_attr: max._core.dialects.builtin.TypedAttr,
+        shape: max._core.dialects.mosh.ShapeAttr,
         dtype: max._core.dtype.DType,
         device_ref: max._core.dialects.m.DeviceRefAttr = ...,
         metadata: max._core.dialects.builtin.DictionaryAttr = ...,
@@ -64,7 +63,7 @@ class BufferType(max._core.Type):
     @overload
     def __init__(
         self,
-        shape_attr: max._core.dialects.builtin.TypedAttr,
+        shape: max._core.dialects.mosh.ShapeAttr,
         element_type: max._core.Type,
         device_ref: max._core.dialects.m.DeviceRefAttr = ...,
         metadata: max._core.dialects.builtin.DictionaryAttr = ...,
@@ -80,13 +79,13 @@ class BufferType(max._core.Type):
     @overload
     def __init__(
         self,
-        shape: max._core.dialects.builtin.TypedAttr,
+        shape: max._core.dialects.mosh.ShapeAttr,
         dtype: max._core.dtype.DType,
         device_ref: max._core.dialects.m.DeviceRefAttr,
         metadata: max._core.dialects.builtin.DictionaryAttr,
     ) -> None: ...
     @property
-    def shape_attr(self) -> max._core.dialects.builtin.TypedAttr: ...
+    def shape(self) -> max._core.dialects.mosh.ShapeAttr: ...
     @property
     def dtype(self) -> max._core.dtype.DType: ...
     @property
@@ -185,7 +184,7 @@ class TensorType(max._core.Type):
     This type represents the shape and element type of a tensor, an optional
     device ref, and an optional dictionary of metadata (e.g., layout, etc.).
 
-    The `shapeAttr` is always a `MOSH::ShapeAttr` (e.g., `[D0, 42, N]`). Rank
+    The `shape` is always a `MOSH::ShapeAttr` (e.g., `[D0, 42, N]`). Rank
     is statically known; individual dimensions may be concrete integers or
     parametric.
 
@@ -206,7 +205,7 @@ class TensorType(max._core.Type):
     @overload
     def __init__(
         self,
-        shape_attr: max._core.dialects.builtin.TypedAttr,
+        shape: max._core.dialects.mosh.ShapeAttr,
         dtype: max._core.dtype.DType,
         device_ref: max._core.dialects.m.DeviceRefAttr = ...,
         metadata: max._core.dialects.builtin.DictionaryAttr = ...,
@@ -214,7 +213,7 @@ class TensorType(max._core.Type):
     @overload
     def __init__(
         self,
-        shape_attr: max._core.dialects.builtin.TypedAttr,
+        shape: max._core.dialects.mosh.ShapeAttr,
         element_type: max._core.Type,
         device_ref: max._core.dialects.m.DeviceRefAttr = ...,
         metadata: max._core.dialects.builtin.DictionaryAttr = ...,
@@ -238,7 +237,7 @@ class TensorType(max._core.Type):
     @overload
     def __init__(
         self,
-        shape: max._core.dialects.builtin.TypedAttr,
+        shape: max._core.dialects.mosh.ShapeAttr,
         dtype: max._core.dtype.DType,
         device_ref: max._core.dialects.m.DeviceRefAttr,
         metadata: max._core.dialects.builtin.DictionaryAttr,
@@ -260,7 +259,7 @@ class TensorType(max._core.Type):
         metadata: max._core.dialects.builtin.DictionaryAttr = ...,
     ) -> None: ...
     @property
-    def shape_attr(self) -> max._core.dialects.builtin.TypedAttr: ...
+    def shape(self) -> max._core.dialects.mosh.ShapeAttr: ...
     @property
     def dtype(self) -> max._core.dtype.DType: ...
     @property
@@ -1277,6 +1276,11 @@ class DistributedAllreduceSumOp(max._core.Operation):
     Allreduce takes in inputs each coming from a different device with
     the same shape as the final output and performs a sum reduction
     across the devices.
+
+    When `group_size` is set to a nonzero value smaller than the number of
+    inputs, contiguous runs of `group_size` devices form independent
+    allreduce groups (e.g. tensor-parallel groups under data parallelism);
+    shapes must then only match within each group.
     """
 
     def __init__(
@@ -1288,6 +1292,7 @@ class DistributedAllreduceSumOp(max._core.Operation):
         inputs: Sequence[max._core.Value[max._core.Type]],
         signal_buffers: Sequence[max._core.Value[max._core.Type]],
         in_chain: max._core.Value[ChainType],
+        group_size: max._core.dialects.builtin.IntegerAttr,
     ) -> None: ...
     @property
     def inputs(self) -> Sequence[max._core.Value[max._core.Type]]: ...
@@ -1295,6 +1300,12 @@ class DistributedAllreduceSumOp(max._core.Operation):
     def signal_buffers(self) -> Sequence[max._core.Value[max._core.Type]]: ...
     @property
     def in_chain(self) -> max._core.Value[ChainType]: ...
+    @property
+    def group_size(self) -> int: ...
+    @group_size.setter
+    def group_size(
+        self, arg: max._core.dialects.builtin.IntegerAttr, /
+    ) -> None: ...
 
 class AndOp(max._core.Operation):
     """

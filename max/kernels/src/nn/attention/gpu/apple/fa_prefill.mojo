@@ -39,7 +39,7 @@ default; set `MODULAR_ENABLE_APPLE_FA_PREFILL=0` to fall back to `mha_gpu_naive`
 """
 
 from std.collections import OptionalReg
-from std.gpu import (
+from max.gpu import (
     WARP_SIZE,
     block_idx,
     lane_id,
@@ -51,7 +51,7 @@ from max.gpu.compute.arch.mma_apple import (
     _mma_apple_transposable,
 )
 from max.gpu.host import DeviceContext
-from std.gpu.primitives.warp import shuffle_xor
+from max.gpu.primitives.warp import shuffle_xor
 from std.math import ceildiv, exp2
 from std.math.constants import log2e
 from std.os.env import getenv
@@ -220,13 +220,15 @@ def _softmax_update[
     """
     var m_tile = _softmax_row_max[num_n_mmas](scores)
     var m_new = Array[_, _SOFTMAX_FRAG_ROWS](
-        fill_with=lambda (i: Int) -> Float32: max(sm_m[i], m_tile[i])
+        fill_with_unrolled=lambda [i: Int]() -> Float32: max(sm_m[i], m_tile[i])
     )
     # A still-fully-masked row keeps its running max at the finite NEG_INF floor
     # (finite, so the subtraction never NaNs), and resolves once its first real
     # key arrives in a later tile.
     var alpha = Array[_, _SOFTMAX_FRAG_ROWS](
-        fill_with=lambda (i: Int) -> Float32: exp2(sm_m[i] - m_new[i])
+        fill_with_unrolled=lambda [i: Int]() -> Float32: exp2(
+            sm_m[i] - m_new[i]
+        )
     )
 
     # Accumulate `l` from each P fragment while it is still register-live (vs a
@@ -276,8 +278,9 @@ def _softmax_normalize[
     seed keeps `l >= 1`, so the guard is a no-op there.
     """
     var inv = Array[_, _SOFTMAX_FRAG_ROWS](
-        fill_with=lambda (i: Int) -> Float32: Float32(1) / sm_l[i] if sm_l[i]
-        > Float32(0) else Float32(0)
+        fill_with_unrolled=lambda [i: Int]() -> Float32: (
+            Float32(1) / sm_l[i] if sm_l[i] > Float32(0) else Float32(0)
+        )
     )
     comptime for ni in range(out_num_n_mmas):
         var o = output[ni]
